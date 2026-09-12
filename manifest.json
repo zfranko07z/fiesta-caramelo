@@ -27,5 +27,22 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "id": "./index.html",
+  "screenshots": [
+    {
+      "src": "screenshot-1.jpg",
+      "sizes": "1080x1920",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Pantalla de inicio de Fiesta Caramelo"
+    },
+    {
+      "src": "screenshot-2.jpg",
+      "sizes": "1080x1920",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Jugando una partida en Fiesta Caramelo"
+    }
   ]
 }
