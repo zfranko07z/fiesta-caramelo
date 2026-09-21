@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#FDF6EC">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none';">
 <title>Fiesta Caramelo</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -121,8 +122,9 @@ button:focus-visible{outline:none;box-shadow:var(--focus-shadow);}
     <p style="font-family:'Fredoka',sans-serif;font-weight:600;font-size:32px;color:var(--text-primary);margin:0 0 8px;">Fiesta Caramelo</p>
     <p style="font-size:14px;color:var(--text-secondary);margin:0 0 36px;">Combina, colecciona, celebra</p>
     <button id="start-game-btn" style="background:#FF5FA2;color:#fff;border:none;padding:14px 44px;font-size:16px;border-radius:999px;box-shadow:0 4px 0 #C23E7C;">Iniciar juego</button>
-    <div style="margin-top:18px;">
+    <div style="margin-top:18px;display:flex;flex-direction:column;align-items:center;gap:8px;">
       <button id="how-to-play-btn" style="background:transparent;border:none;color:var(--text-secondary);font-size:13px;text-decoration:underline;padding:6px;">Cómo jugar</button>
+      <a href="privacidad.html" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:var(--text-secondary);text-decoration:underline;">Política de privacidad</a>
     </div>
   </div>
 
@@ -301,6 +303,63 @@ var board=[],score=0,movesLeft=0,currentLevel=0,selected=null,busy=false,adsWatc
 var stars=new Array(LEVELS.length).fill(0);
 var unlockedCount=1;
 var lives=LIVES_MAX,nextLifeIn=LIVES_REGEN_SECONDS,livesAdsUsed=0;
+var SAVE_KEY='fiesta-caramelo-save-v1';
+
+function safeNumber(value, fallback){
+  var n=Number(value);
+  return Number.isFinite(n)?n:fallback;
+}
+
+function normalizeStarCount(value){
+  return Math.max(0,Math.min(3,safeNumber(value,0)));
+}
+
+function saveProgress(){
+  try{
+    if(!window.localStorage)return;
+    var payload={
+      currentLevel:Math.max(0,Math.min(LEVELS.length-1,safeNumber(currentLevel,0))),
+      stars:stars.slice(0,LEVELS.length).map(normalizeStarCount),
+      unlockedCount:Math.max(1,Math.min(LEVELS.length,safeNumber(unlockedCount,1))),
+      lives:Math.max(0,Math.min(LIVES_MAX,safeNumber(lives,LIVES_MAX))),
+      nextLifeIn:Math.max(0,safeNumber(nextLifeIn,LIVES_REGEN_SECONDS)),
+      livesAdsUsed:Math.max(0,safeNumber(livesAdsUsed,0)),
+      adsWatched:Math.max(0,safeNumber(adsWatched,0))
+    };
+    if(!Array.isArray(payload.stars)||payload.stars.length!==LEVELS.length){return;}
+    localStorage.setItem(SAVE_KEY,JSON.stringify(payload));
+  }catch(err){console.warn('No se pudo guardar el progreso:',err);}
+}
+
+function loadProgress(){
+  try{
+    if(!window.localStorage)return;
+    var raw=localStorage.getItem(SAVE_KEY);
+    if(!raw)return;
+    var data=JSON.parse(raw);
+    if(!data||typeof data!=='object'||Array.isArray(data))return;
+    if(!Array.isArray(data.stars))return;
+
+    stars=new Array(LEVELS.length).fill(0);
+    for(var i=0;i<LEVELS.length;i++){
+      stars[i]=normalizeStarCount(data.stars[i]);
+    }
+
+    unlockedCount=Math.max(1,Math.min(LEVELS.length,safeNumber(data.unlockedCount,1)));
+    var starsUnlocked=1;
+    for(var j=0;j<stars.length;j++){
+      if(stars[j]>0)starsUnlocked=Math.max(starsUnlocked,j+1);
+    }
+    unlockedCount=Math.max(unlockedCount,Math.min(LEVELS.length,starsUnlocked));
+
+    currentLevel=Math.max(0,Math.min(LEVELS.length-1,safeNumber(data.currentLevel,0)));
+    currentLevel=Math.min(currentLevel,Math.max(0,unlockedCount-1));
+    lives=Math.max(0,Math.min(LIVES_MAX,safeNumber(data.lives,LIVES_MAX)));
+    nextLifeIn=Math.max(0,safeNumber(data.nextLifeIn,LIVES_REGEN_SECONDS));
+    livesAdsUsed=Math.max(0,safeNumber(data.livesAdsUsed,0));
+    adsWatched=Math.max(0,safeNumber(data.adsWatched,0));
+  }catch(err){console.warn('No se pudo cargar el progreso guardado:',err);}
+}
 
 function randInt(n){return Math.floor(Math.random()*n);}
 function idxRC(r,c){return r*SIZE+c;}
@@ -637,6 +696,7 @@ function applyLevelTheme(index){
 
 function startLevel(index){
   currentLevel=index;
+  saveProgress();
   applyLevelTheme(index);
   var lv=levelData();
   board=safeGenerateBoard(lv.colors);
@@ -649,6 +709,7 @@ function startLevel(index){
   updateLivesUI();
   showScreen('game');
   setStatus('');
+  saveProgress();
 }
 
 function styleCandyEl(el,cell){
@@ -743,6 +804,7 @@ function updateLivesUI(){
   }
   var adBtn=document.getElementById('lives-ad-btn');
   adBtn.style.display=(lives<LIVES_MAX&&livesAdsUsed<LIVES_AD_CAP)?'inline-flex':'none';
+  saveProgress();
 }
 
 setInterval(function(){
@@ -1164,6 +1226,7 @@ function winLevel(){
   else if(score>=lv.target*1.25)earned=2;
   stars[currentLevel]=Math.max(stars[currentLevel]||0,earned);
   unlockedCount=Math.max(unlockedCount,Math.min(LEVELS.length,currentLevel+2));
+  saveProgress();
   var mascotWrap=document.getElementById('win-mascot');
   mascotWrap.innerHTML='';
   mascotWrap.appendChild(mascotEl(56,'happy'));
@@ -1668,8 +1731,11 @@ document.getElementById('restart-btn').addEventListener('click',function(){
 document.getElementById('watch-ad-btn').addEventListener('click',function(){watchAd('moves');});
 document.getElementById('lives-ad-btn').addEventListener('click',function(){watchAd('life');});
 
+loadProgress();
 renderLevelPath();
 updateLivesUI();
+window.addEventListener('beforeunload',saveProgress);
+document.addEventListener('visibilitychange',function(){ if(document.hidden){saveProgress();} });
 document.getElementById('splash-screen').style.backgroundImage="linear-gradient(rgba(253,246,236,.5),rgba(253,246,236,.78)),url(data:image/jpeg;base64,"+MAP_BG[0]+")";
 showScreen('splash');
 if('serviceWorker' in navigator && location.protocol!=='file:'){
