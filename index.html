@@ -196,6 +196,8 @@ button:focus-visible{outline:none;box-shadow:var(--focus-shadow);}
       <div id="progress-el" style="height:100%;width:0%;background:var(--fill-success);"></div>
     </div>
 
+    <p id="mission-el" style="display:none;text-align:center;font-size:13px;color:var(--text-secondary);margin:-.5rem 0 1rem;"></p>
+
     <div style="text-align:center;">
       <div id="board-panel" style="background-color:#FFF3E0;background-image:radial-gradient(circle,rgba(216,90,48,0.10) 1.5px,transparent 1.5px);background-size:16px 16px;border-radius:16px;padding:10px;display:inline-block;">
         <div id="board-el" style="display:grid;grid-template-columns:repeat(8,34px);grid-template-rows:repeat(8,34px);gap:3px;"></div>
@@ -265,17 +267,18 @@ button:focus-visible{outline:none;box-shadow:var(--focus-shadow);}
    ========================================================================== */
 /* ===== CONFIGURACION DE NIVELES =====
    Para agregar mas niveles en el futuro:
-   1) Agrega un objeto {target, moves, colors} al final del arreglo LEVELS (uno por nivel).
+  1) Agrega un objeto {target, moves, colors} al final del arreglo LEVELS (uno por nivel).
       - target: puntos necesarios para superar el nivel.
       - moves: movimientos disponibles.
       - colors: cuantos tipos de caramelo distintos usa (maximo 5, ya que hay 5 imagenes en FRUIT_IMAGES).
+    - mission (opcional): {color, target, label} para pedir caramelos concretos, por ejemplo mission:{color:0,target:30,label:'Fresas'}.
    2) (Opcional) Agrega el icono numerado de ese nivel a LEVEL_ICONS (mismo formato: {1:..,2:..,3:.. en base64}).
       Si no agregas uno, el juego reutiliza automaticamente un icono existente (ver getLevelIconSet), asi que nunca se rompe.
    3) (Opcional) Agrega una imagen nueva a MAP_BG cada 5 niveles para variar el fondo del camino.
       Si no agregas una, el juego repite las 4 imagenes actuales en ciclo (ver MAP_BG[m%MAP_BG.length]), asi que tampoco se rompe.
    En resumen: el minimo indispensable para agregar un nivel es UNA linea nueva en LEVELS. */
 var LEVELS=[
-  {target:3000,moves:20,colors:4},
+  {target:3000,moves:20,colors:4,mission:{color:0,target:30,label:'Fresas'}},
   {target:4200,moves:20,colors:4},
   {target:5600,moves:18,colors:5},
   {target:7200,moves:18,colors:5},
@@ -300,6 +303,7 @@ var FRUIT_IMAGES=['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIwAAACMCAYAAAC
 var SIZE=8,CELL_PITCH=37;
 var LIVES_MAX=3,LIVES_REGEN_SECONDS=1200,LIVES_AD_CAP=3;
 var board=[],score=0,movesLeft=0,currentLevel=0,selected=null,busy=false,adsWatched=0,gameOver=false,bonusMovesActive=false;
+var missionProgress=0;
 var stars=new Array(LEVELS.length).fill(0);
 var unlockedCount=1;
 var lives=LIVES_MAX,nextLifeIn=LIVES_REGEN_SECONDS,livesAdsUsed=0;
@@ -365,6 +369,15 @@ function randInt(n){return Math.floor(Math.random()*n);}
 function idxRC(r,c){return r*SIZE+c;}
 function getRC(i){return {r:Math.floor(i/SIZE),c:i%SIZE};}
 function makeCandy(color,type){return {color:color,type:type||'normal'};}
+
+function countMissionCandies(clearSet){
+  var mission=levelData().mission;
+  if(!mission)return;
+  clearSet.forEach(function(idx){
+    var cell=board[idx];
+    if(cell&&cell.color===mission.color)missionProgress++;
+  });
+}
 
 function mascotEl(size,mood){
   var wrap=document.createElement('div');
@@ -640,6 +653,7 @@ function resolveCascadesAnimated(colors,onDone,combo){
   if(info.set.size===0){onDone(combo);return;}
   combo++;
   var clearSet=bfsClear(Array.from(info.set));
+  countMissionCandies(clearSet);
   score+=clearSet.size*10*combo;
   var newSpecials={};
   info.runs.forEach(function(run){
@@ -696,6 +710,7 @@ function applyLevelTheme(index){
 
 function startLevel(index){
   currentLevel=index;
+  missionProgress=0;
   saveProgress();
   applyLevelTheme(index);
   var lv=levelData();
@@ -765,6 +780,15 @@ function renderHUD(){
   var lv=levelData();
   var pct=Math.min(100,Math.round((score/lv.target)*100));
   document.getElementById('progress-el').style.width=pct+'%';
+  var missionEl=document.getElementById('mission-el');
+  if(lv.mission){
+    var missionPct=Math.min(100,Math.round((missionProgress/lv.mission.target)*100));
+    missionEl.style.display='block';
+    missionEl.textContent='Misión: '+lv.mission.label+' '+Math.min(missionProgress,lv.mission.target)+'/'+lv.mission.target;
+    missionEl.style.color=missionPct>=100?'var(--fill-success)':'var(--text-secondary)';
+  }else{
+    missionEl.style.display='none';
+  }
 }
 
 function setStatus(text){
@@ -1074,6 +1098,7 @@ function performValidSwap(a,b,lv){
   movesLeft=Math.max(0,movesLeft-1);
   if(!hasMatch){
     var clearSet=bfsClear([a,b]);
+    countMissionCandies(clearSet);
     score+=clearSet.size*10;
     triggerClearEffects(clearSet);
     renderHUD();
@@ -1160,7 +1185,8 @@ function finishBonusMoves(){
 
 function checkEnd(){
   var lv=levelData();
-  if(score>=lv.target){
+  var completed=lv.mission?missionProgress>=lv.mission.target:score>=lv.target;
+  if(completed){
     if(movesLeft>0&&!bonusMovesActive)startBonusMoves();
     else if(!bonusMovesActive){gameOver=true;winLevel();}
   }
@@ -1238,7 +1264,7 @@ function winLevel(){
   for(var s=0;s<3;s++){
     starsEl.appendChild(starSvgEl(s<earned));
   }
-  document.getElementById('win-score').textContent='Puntos: '+score+' / '+lv.target;
+  document.getElementById('win-score').textContent=lv.mission?'Fresas: '+Math.min(missionProgress,lv.mission.target)+' / '+lv.mission.target:'Puntos: '+score+' / '+lv.target;
   document.getElementById('next-level-btn').style.display=(currentLevel+1<LEVELS.length)?'block':'none';
   document.getElementById('win-modal').style.display='flex';
 }
