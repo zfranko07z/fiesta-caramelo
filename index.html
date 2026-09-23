@@ -135,6 +135,10 @@ button:focus-visible{outline:none;box-shadow:var(--focus-shadow);}
       </div>
       <div id="tutorial-card" style="background:var(--surface-1);border-radius:16px;padding:1.5rem 1.25rem;text-align:center;min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;"></div>
       <div id="tutorial-dots" style="display:flex;justify-content:center;gap:6px;margin:14px 0;"></div>
+      <label style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;color:var(--text-secondary);margin:0 0 14px;cursor:pointer;">
+        <input id="tutorial-dont-show" type="checkbox" style="accent-color:var(--text-accent);">
+        No volver a mostrar al iniciar
+      </label>
       <div style="display:flex;gap:8px;">
         <button id="tutorial-back-btn" style="flex:1;">Atrás</button>
         <button id="tutorial-next-btn" style="flex:2;border-color:var(--border-accent);color:var(--text-accent);">Siguiente</button>
@@ -1334,6 +1338,19 @@ var TUTORIAL_SLIDES=[
   {title:'Vidas y movimientos',text:'Cada nivel tiene un numero limitado de movimientos. Si se acaban antes de llegar a la meta, puedes ver un anuncio para +7 movimientos, o perder una vida y reintentar.',visual:'lives'}
 ];
 var tutorialIndex=0;
+var TUTORIAL_PREF_KEY='fiesta-caramelo-hide-tutorial-v1';
+
+function shouldSkipTutorialOnStart(){
+  try{return localStorage.getItem(TUTORIAL_PREF_KEY)==='1';}
+  catch(err){return false;}
+}
+
+function saveTutorialPreference(){
+  try{
+    var checkbox=document.getElementById('tutorial-dont-show');
+    localStorage.setItem(TUTORIAL_PREF_KEY,checkbox.checked?'1':'0');
+  }catch(err){console.warn('No se pudo guardar la preferencia del tutorial:',err);}
+}
 
 function tutorialVisual(kind){
   var wrap=document.createElement('div');
@@ -1454,6 +1471,7 @@ function renderTutorialCard(){
 
 function startTutorial(){
   tutorialIndex=0;
+  document.getElementById('tutorial-dont-show').checked=shouldSkipTutorialOnStart();
   renderTutorialCard();
   showScreen('tutorial');
 }
@@ -1464,9 +1482,13 @@ function finishTutorial(){
   updateLivesUI();
 }
 
-document.getElementById('start-game-btn').addEventListener('click',startTutorial);
+document.getElementById('start-game-btn').addEventListener('click',function(){
+  if(shouldSkipTutorialOnStart()){finishTutorial();}
+  else{startTutorial();}
+});
 document.getElementById('how-to-play-btn').addEventListener('click',startTutorial);
 document.getElementById('help-btn').addEventListener('click',startTutorial);
+document.getElementById('tutorial-dont-show').addEventListener('change',saveTutorialPreference);
 document.getElementById('tutorial-skip-btn').addEventListener('click',finishTutorial);
 document.getElementById('tutorial-back-btn').addEventListener('click',function(){
   if(tutorialIndex>0){tutorialIndex--;renderTutorialCard();}
