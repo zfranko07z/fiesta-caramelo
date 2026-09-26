@@ -67,6 +67,10 @@ button:focus-visible{outline:none;box-shadow:var(--focus-shadow);}
 .bomb-shock{position:absolute;border-radius:50%;border:4px solid #FF7A45;box-shadow:0 0 16px 4px rgba(255,122,69,.75);animation:bombShock .42s ease-out forwards;pointer-events:none;}
 @keyframes confettiFall{0%{transform:translateY(0) translateX(0) rotate(0deg);opacity:1;}100%{transform:translateY(var(--fall-dist)) translateX(var(--drift)) rotate(var(--spin));opacity:0.85;}}
 .confetti-piece{position:absolute;top:-20px;}
+@keyframes comboCheer{0%{transform:scale(.72) translateY(5px);opacity:0;}65%{transform:scale(1.12) translateY(-2px);opacity:1;}100%{transform:scale(1) translateY(0);opacity:1;}}
+#combo-feedback-el{display:none;}
+#combo-feedback-el.combo-feedback{position:absolute;inset:0;z-index:4;align-items:center;justify-content:center;border-radius:16px;background:rgba(43,27,61,.34);pointer-events:none;}
+#combo-feedback-text{max-width:calc(100% - 20px);white-space:normal;font-family:'Fredoka',sans-serif;font-size:clamp(22px,6vw,32px);font-weight:600;line-height:1.15;color:#D52C75;text-align:center;text-shadow:0 2px 0 #fff,0 3px 8px rgba(213,44,117,.22);background:#FFE3EF;border:2px solid #fff;border-radius:14px;padding:10px 20px;box-shadow:0 5px 18px rgba(43,27,61,.28);animation:comboCheer .38s ease-out;}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;}
 #board-panel{max-width:100%;overflow-x:auto;}
 .path-node{position:absolute;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:50%;}
@@ -202,9 +206,10 @@ button:focus-visible{outline:none;box-shadow:var(--focus-shadow);}
 
     <p id="mission-el" style="display:none;text-align:center;font-size:13px;color:var(--text-secondary);margin:-.5rem 0 1rem;"></p>
 
-    <div style="text-align:center;">
-      <div id="board-panel" style="background-color:#FFF3E0;background-image:radial-gradient(circle,rgba(216,90,48,0.10) 1.5px,transparent 1.5px);background-size:16px 16px;border-radius:16px;padding:10px;display:inline-block;">
+    <div style="text-align:center;position:relative;">
+      <div id="board-panel" style="position:relative;overflow:hidden;background-color:#FFF3E0;background-image:radial-gradient(circle,rgba(216,90,48,0.10) 1.5px,transparent 1.5px);background-size:16px 16px;border-radius:16px;padding:10px;display:inline-block;">
         <div id="board-el" style="display:grid;grid-template-columns:repeat(8,34px);grid-template-rows:repeat(8,34px);gap:3px;"></div>
+        <div id="combo-feedback-el" aria-live="polite"><span id="combo-feedback-text"></span></div>
       </div>
     </div>
 
@@ -308,6 +313,7 @@ var SIZE=8,CELL_PITCH=37;
 var LIVES_MAX=3,LIVES_REGEN_SECONDS=1200,LIVES_AD_CAP=3;
 var board=[],score=0,movesLeft=0,currentLevel=0,selected=null,busy=false,adsWatched=0,gameOver=false,bonusMovesActive=false;
 var missionProgress=0;
+var comboFeedbackTimer=null,comboFeedbackId=0;
 var stars=new Array(LEVELS.length).fill(0);
 var unlockedCount=1;
 var lives=LIVES_MAX,nextLifeIn=LIVES_REGEN_SECONDS,livesAdsUsed=0;
@@ -656,6 +662,7 @@ function resolveCascadesAnimated(colors,onDone,combo){
   var info=findMatches(board);
   if(info.set.size===0){onDone(combo);return;}
   combo++;
+  showComboFeedback(combo);
   var clearSet=bfsClear(Array.from(info.set));
   countMissionCandies(clearSet);
   score+=clearSet.size*10*combo;
@@ -807,7 +814,33 @@ function renderHUD(){
 }
 
 function setStatus(text){
+  var comboEl=document.getElementById('combo-feedback-el');
+  if(comboFeedbackTimer){clearTimeout(comboFeedbackTimer);comboFeedbackTimer=null;}
+  comboFeedbackId++;
+  comboEl.classList.remove('combo-feedback');
+  comboEl.style.display='none';
   document.getElementById('status-el').textContent=text||'';
+}
+
+function showComboFeedback(combo){
+  var comboEl=document.getElementById('combo-feedback-el');
+  var comboText=document.getElementById('combo-feedback-text');
+  var cheers=['','¡Genial!','¡Increíble!','¡Imparable!','¡Espectacular!','¡Legendario!'];
+  var cheer=cheers[Math.min(combo,cheers.length-1)]+(combo>1?' x'+combo:'');
+  if(comboFeedbackTimer){clearTimeout(comboFeedbackTimer);}
+  var feedbackId=++comboFeedbackId;
+  comboEl.classList.remove('combo-feedback');
+  comboText.textContent=cheer;
+  comboEl.style.display='flex';
+  void comboEl.offsetWidth;
+  comboEl.classList.add('combo-feedback');
+  comboFeedbackTimer=setTimeout(function(){
+    if(feedbackId!==comboFeedbackId)return;
+    comboEl.classList.remove('combo-feedback');
+    comboEl.style.display='none';
+    comboText.textContent='';
+    comboFeedbackTimer=null;
+  },1000);
 }
 
 function heartSvgEl(filled){
@@ -1115,6 +1148,7 @@ function performValidSwap(a,b,lv){
     var clearSet=bfsClear([a,b]);
     countMissionCandies(clearSet);
     score+=clearSet.size*10;
+    showComboFeedback(1);
     triggerClearEffects(clearSet);
     renderHUD();
     setTimeout(function(){

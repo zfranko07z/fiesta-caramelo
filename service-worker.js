@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fiesta-caramelo-v5';
+const CACHE_NAME = 'fiesta-caramelo-v8';
 const FILES_TO_CACHE = [
   './',
   './index.html',
